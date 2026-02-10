@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout';
-import { Tab, UserProfile, Language, Theme } from './types';
+import { Tab, UserProfile, Language, Theme, UserSport } from './types';
 import Dashboard from './views/Dashboard';
 import Coach from './views/Coach';
 import Social from './views/Social';
@@ -9,7 +8,7 @@ import Maps from './views/Maps';
 import Scout from './views/Scout';
 import Chat from './views/Chat';
 import { translations } from './i18n';
-import { Globe, Moon, Sun } from 'lucide-react';
+import { Globe, Moon, Sun, CheckCircle2, RefreshCw, Lock, Mail, User as UserIcon } from 'lucide-react';
 import Logo from './components/Logo';
 
 const App: React.FC = () => {
@@ -19,6 +18,19 @@ const App: React.FC = () => {
   const [lang, setLang] = useState<Language>('en');
   const [theme, setTheme] = useState<Theme>('light');
   const [isInitializing, setIsInitializing] = useState(true);
+  const [authMode, setAuthMode] = useState<'signup' | 'login'>('signup');
+
+  // Registration Form states
+  const [regName, setRegName] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [regSports, setRegSports] = useState<string[]>([]);
+  const [sportLevels, setSportLevels] = useState<Record<string, string>>({});
+  const [avatarSeed, setAvatarSeed] = useState(Math.random().toString(36).substring(7));
+
+  // Login Form states
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
 
   useEffect(() => {
     const savedUser = localStorage.getItem('sportbuddy_user');
@@ -39,28 +51,77 @@ const App: React.FC = () => {
 
   const t = translations[lang];
 
-  const handleCreateAccount = (e: React.FormEvent<HTMLFormElement>) => {
+  const randomizeAvatar = () => {
+    setAvatarSeed(Math.random().toString(36).substring(7));
+  };
+
+  const handleCreateAccount = (e: React.FormEvent) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
+    if (!regName.trim() || !regEmail.trim() || !regPassword.trim() || regSports.length === 0) {
+      alert(lang === 'it' ? 'Compila tutti i campi e seleziona almeno uno sport.' : 'Please fill all fields and select at least one sport.');
+      return;
+    }
+
+    // Check if account already exists
+    const existingUser = localStorage.getItem(`user_auth_${regEmail}`);
+    if (existingUser) {
+      alert(lang === 'it' ? 'Un account con questa email esiste già.' : 'An account with this email already exists.');
+      return;
+    }
+
+    const selectedSports: UserSport[] = regSports.map(s => ({
+      sport: s,
+      level: sportLevels[s] || t.beginner
+    }));
+
     const newUser: UserProfile = {
-      name: formData.get('name') as string,
-      sport: formData.get('sport') as string,
-      level: formData.get('level') as string,
-      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${formData.get('name')}`,
+      name: regName,
+      email: regEmail,
+      password: regPassword,
+      selectedSports,
+      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${avatarSeed}`,
       stats: { workouts: 0, matches: 0, chats: 0 }
     };
+
     setUser(newUser);
     localStorage.setItem('sportbuddy_user', JSON.stringify(newUser));
+    localStorage.setItem(`user_auth_${regEmail}`, JSON.stringify(newUser));
+  };
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    const savedUserAuth = localStorage.getItem(`user_auth_${loginEmail}`);
+    if (savedUserAuth) {
+      const parsed: UserProfile = JSON.parse(savedUserAuth);
+      if (parsed.password === loginPassword) {
+        setUser(parsed);
+        localStorage.setItem('sportbuddy_user', JSON.stringify(parsed));
+      } else {
+        alert(lang === 'it' ? 'Password errata.' : 'Incorrect password.');
+      }
+    } else {
+      alert(lang === 'it' ? 'Nessun account trovato con questa email.' : 'No account found with this email.');
+      setAuthMode('signup');
+    }
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    setActiveTab(Tab.DASHBOARD);
+    localStorage.removeItem('sportbuddy_user');
   };
 
   const updateStats = (key: keyof UserProfile['stats']) => {
-    if (!user) return;
-    const updatedUser = {
-      ...user,
-      stats: { ...user.stats, [key]: user.stats[key] + 1 }
+    const currentUser = user;
+    if (!currentUser) return;
+    
+    const updatedUser: UserProfile = {
+      ...currentUser,
+      stats: { ...currentUser.stats, [key]: currentUser.stats[key] + 1 }
     };
     setUser(updatedUser);
     localStorage.setItem('sportbuddy_user', JSON.stringify(updatedUser));
+    localStorage.setItem(`user_auth_${currentUser.email}`, JSON.stringify(updatedUser));
   };
 
   const navigateToTab = (tab: Tab, subView: 'main' | 'history' = 'main') => {
@@ -70,81 +131,225 @@ const App: React.FC = () => {
     }
   };
 
+  const toggleSportSelection = (sportLabel: string) => {
+    if (regSports.includes(sportLabel)) {
+      setRegSports(prev => prev.filter(s => s !== sportLabel));
+      const newLevels = { ...sportLevels };
+      delete newLevels[sportLabel];
+      setSportLevels(newLevels);
+    } else {
+      if (regSports.length < 3) {
+        setRegSports(prev => [...prev, sportLabel]);
+        setSportLevels(prev => ({ ...prev, [sportLabel]: t.beginner }));
+      }
+    }
+  };
+
   if (isInitializing) return null;
 
   if (!user) {
+    const levels = [t.beginner, t.amateur, t.intermediate, t.specialist, t.advanced];
+    const sportsList = Object.entries(t.sports);
+
     return (
-      <div className={`min-h-screen ${theme === 'dark' ? 'bg-gray-900' : 'bg-blue-600'} flex items-center justify-center p-4 transition-colors overflow-hidden relative`}>
-        {/* Background Decorative Circles */}
-        <div className="absolute top-0 left-0 w-96 h-96 bg-white/5 rounded-full -translate-x-1/2 -translate-y-1/2 blur-3xl"></div>
-        <div className="absolute bottom-0 right-0 w-[30rem] h-[30rem] bg-indigo-900/10 rounded-full translate-x-1/3 translate-y-1/3 blur-3xl"></div>
+      <div className={`min-h-screen ${theme === 'dark' ? 'bg-gray-950' : 'bg-blue-600'} flex items-center justify-center p-4 transition-colors relative`}>
+        <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+          <div className="absolute top-0 left-0 w-96 h-96 bg-white/5 rounded-full -translate-x-1/2 -translate-y-1/2 blur-3xl"></div>
+          <div className="absolute bottom-0 right-0 w-[40rem] h-[40rem] bg-indigo-900/10 rounded-full translate-x-1/3 translate-y-1/3 blur-3xl"></div>
+        </div>
         
-        <div className={`${theme === 'dark' ? 'bg-gray-800 border border-gray-700' : 'bg-white'} rounded-[2rem] p-6 md:p-8 w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-500 relative z-10`}>
-          {/* Internal Header for Toggles */}
-          <div className="absolute top-6 right-6 flex gap-1.5">
-             <button onClick={() => setLang(lang === 'en' ? 'it' : 'en')} className={`p-2 rounded-full transition-colors ${theme === 'dark' ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}>
-                <Globe size={16} />
+        <div className={`${theme === 'dark' ? 'bg-gray-900 border border-gray-800' : 'bg-white'} rounded-[3rem] p-8 md:p-10 w-full max-w-2xl shadow-2xl animate-in zoom-in-95 duration-500 relative z-10 overflow-hidden`}>
+          <div className="absolute top-8 right-8 flex gap-2">
+             <button onClick={() => setLang(lang === 'en' ? 'it' : 'en')} className={`p-2 rounded-xl transition-colors ${theme === 'dark' ? 'bg-gray-800 text-gray-300' : 'bg-gray-50 text-gray-500'}`}>
+                <Globe size={18} />
              </button>
-             <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} className={`p-2 rounded-full transition-colors ${theme === 'dark' ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}>
-                {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
+             <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} className={`p-2 rounded-xl transition-colors ${theme === 'dark' ? 'bg-gray-800 text-gray-300' : 'bg-gray-50 text-gray-500'}`}>
+                {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
              </button>
           </div>
 
-          <div className="flex flex-col items-center mb-6">
+          <div className="flex flex-col items-center mb-8">
             <Logo size="md" className="mb-4" />
-            <h1 className={`text-xl font-black ${theme === 'dark' ? 'text-white' : 'text-gray-900'} tracking-tight`}>{t.create_profile}</h1>
-            <p className="text-gray-500 text-[11px] font-medium text-center mt-1.5 max-w-[220px] leading-relaxed">{t.join_community}</p>
+            <h1 className={`text-2xl font-black ${theme === 'dark' ? 'text-white' : 'text-gray-900'} tracking-tight text-center`}>
+              {authMode === 'signup' ? t.create_profile : t.login_btn}
+            </h1>
           </div>
           
-          <form onSubmit={handleCreateAccount} className="space-y-4">
-            <div>
-              <label className="block text-[9px] font-black uppercase text-gray-400 tracking-widest mb-1.5 px-1">{t.full_name}</label>
-              <input name="name" required className={`w-full ${theme === 'dark' ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 border-gray-200 placeholder-gray-400'} border rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all`} placeholder="John Doe" />
-            </div>
-            <div>
-              <label className="block text-[9px] font-black uppercase text-gray-400 tracking-widest mb-1.5 px-1">{t.primary_sport}</label>
-              <div className="relative">
-                <select name="sport" className={`w-full ${theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 border-gray-200'} border rounded-xl px-4 py-3 text-sm outline-none appearance-none shadow-sm transition-all`}>
-                  {Object.entries(t.sports).map(([key, label]) => (
-                    <option key={key} value={label}>{label}</option>
-                  ))}
-                </select>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                  <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          {authMode === 'signup' ? (
+            <form onSubmit={handleCreateAccount} className="space-y-6">
+              <div className="flex flex-col items-center mb-6">
+                <div className="relative group">
+                  <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full blur opacity-25 group-hover:opacity-50 transition"></div>
+                  <img 
+                    src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${avatarSeed}`} 
+                    className="w-24 h-24 rounded-full bg-gray-100 dark:bg-gray-800 border-4 border-white dark:border-gray-700 relative z-10 shadow-lg"
+                    alt="Avatar Preview" 
+                  />
+                  <button 
+                    type="button"
+                    onClick={randomizeAvatar}
+                    className="absolute bottom-0 right-0 bg-blue-600 text-white p-2 rounded-full shadow-lg z-20 hover:scale-110 active:rotate-180 transition-all border-2 border-white dark:border-gray-900"
+                    title="Randomize Avatar"
+                  >
+                    <RefreshCw size={16} />
+                  </button>
                 </div>
               </div>
-            </div>
-            <div>
-              <label className="block text-[9px] font-black uppercase text-gray-400 tracking-widest mb-1.5 px-1">{t.exp_level}</label>
-              <div className="relative">
-                <select name="level" className={`w-full ${theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 border-gray-200'} border rounded-xl px-4 py-3 text-sm outline-none appearance-none shadow-sm transition-all`}>
-                  <option value="Beginner">{t.beginner}</option>
-                  <option value="Intermediate">{t.intermediate}</option>
-                  <option value="Advanced">{t.advanced}</option>
-                </select>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                  <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-[10px] font-black uppercase text-gray-400 tracking-widest px-1">
+                    <UserIcon size={12} /> {t.full_name}
+                  </label>
+                  <input 
+                    value={regName}
+                    onChange={(e) => setRegName(e.target.value)}
+                    required 
+                    className={`w-full ${theme === 'dark' ? 'bg-gray-800 text-white border-gray-700' : 'bg-gray-50 border-gray-200'} border-2 rounded-2xl px-5 py-3 text-sm outline-none focus:border-blue-500 transition-all`} 
+                    placeholder="Alex Rivera" 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-[10px] font-black uppercase text-gray-400 tracking-widest px-1">
+                    <Mail size={12} /> {t.email_address}
+                  </label>
+                  <input 
+                    type="email"
+                    value={regEmail}
+                    onChange={(e) => setRegEmail(e.target.value)}
+                    required 
+                    className={`w-full ${theme === 'dark' ? 'bg-gray-800 text-white border-gray-700' : 'bg-gray-50 border-gray-200'} border-2 rounded-2xl px-5 py-3 text-sm outline-none focus:border-blue-500 transition-all`} 
+                    placeholder="alex@example.com" 
+                  />
                 </div>
               </div>
-            </div>
-            <button type="submit" className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-4 rounded-xl font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-500/10 hover:shadow-blue-500/30 hover:-translate-y-0.5 transition-all active:scale-95 mt-4">
-              {t.create_btn}
-            </button>
-          </form>
+
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-[10px] font-black uppercase text-gray-400 tracking-widest px-1">
+                  <Lock size={12} /> {lang === 'en' ? 'Password' : 'Password'}
+                </label>
+                <input 
+                  type="password"
+                  value={regPassword}
+                  onChange={(e) => setRegPassword(e.target.value)}
+                  required 
+                  className={`w-full ${theme === 'dark' ? 'bg-gray-800 text-white border-gray-700' : 'bg-gray-50 border-gray-200'} border-2 rounded-2xl px-5 py-3 text-sm outline-none focus:border-blue-500 transition-all`} 
+                  placeholder="••••••••" 
+                />
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex justify-between items-center px-1">
+                  <label className="block text-[10px] font-black uppercase text-gray-400 tracking-widest">{t.primary_sport}</label>
+                  <span className="text-[10px] font-black text-blue-500 uppercase">{regSports.length} / 3</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 max-h-[140px] overflow-y-auto no-scrollbar p-1">
+                  {sportsList.map(([key, label]) => {
+                    const isSelected = regSports.includes(label);
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => toggleSportSelection(label)}
+                        className={`px-3 py-3 rounded-xl text-[9px] font-bold uppercase tracking-tight transition-all border-2 text-center truncate ${
+                          isSelected 
+                          ? 'bg-blue-600 border-blue-600 text-white shadow-lg' 
+                          : (theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-500 hover:border-gray-600' : 'bg-white border-gray-100 text-gray-400 hover:border-blue-200')
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {regSports.length > 0 && (
+                <div className="space-y-3 animate-in fade-in duration-300">
+                  <label className="block text-[10px] font-black uppercase text-gray-400 tracking-widest px-1">{t.exp_level}</label>
+                  <div className="space-y-2">
+                    {regSports.map((sport) => (
+                      <div key={sport} className={`flex items-center gap-3 p-3 rounded-2xl border ${theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+                        <span className="flex-1 text-[11px] font-black uppercase tracking-widest text-blue-500 truncate">{sport}</span>
+                        <select 
+                          value={sportLevels[sport]} 
+                          onChange={(e) => setSportLevels({ ...sportLevels, [sport]: e.target.value })}
+                          className={`bg-transparent outline-none text-[10px] font-bold uppercase tracking-widest ${theme === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}
+                        >
+                          {levels.map(lvl => <option key={lvl} value={lvl}>{lvl}</option>)}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-4 space-y-4">
+                <button type="submit" className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:-translate-y-1 transition-all active:scale-95">
+                  {t.create_btn}
+                </button>
+                <p className="text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                  {t.has_account}{' '}
+                  <button type="button" onClick={() => setAuthMode('login')} className="text-blue-600 hover:underline">{t.login_btn}</button>
+                </p>
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={handleLogin} className="space-y-6 animate-in slide-in-from-right-4">
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-[10px] font-black uppercase text-gray-400 tracking-widest px-1">
+                   <Mail size={12} /> {t.email_address}
+                </label>
+                <input 
+                  type="email"
+                  required 
+                  value={loginEmail}
+                  onChange={(e) => setLoginEmail(e.target.value)}
+                  className={`w-full ${theme === 'dark' ? 'bg-gray-800 text-white border-gray-700' : 'bg-gray-50 border-gray-200'} border-2 rounded-2xl px-5 py-4 text-sm outline-none focus:border-blue-500 transition-all`} 
+                  placeholder="Enter your email" 
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-[10px] font-black uppercase text-gray-400 tracking-widest px-1">
+                   <Lock size={12} /> {lang === 'en' ? 'Password' : 'Password'}
+                </label>
+                <input 
+                  type="password"
+                  required 
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  className={`w-full ${theme === 'dark' ? 'bg-gray-800 text-white border-gray-700' : 'bg-gray-50 border-gray-200'} border-2 rounded-2xl px-5 py-4 text-sm outline-none focus:border-blue-500 transition-all`} 
+                  placeholder="••••••••" 
+                />
+              </div>
+              <div className="pt-4 space-y-4">
+                <button type="submit" className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:-translate-y-1 transition-all active:scale-95">
+                  {t.login_btn}
+                </button>
+                <p className="text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                  {t.no_account}{' '}
+                  <button type="button" onClick={() => setAuthMode('signup')} className="text-blue-600 hover:underline">{t.create_btn}</button>
+                </p>
+              </div>
+            </form>
+          )}
         </div>
       </div>
     );
   }
 
+  // Explicitly narrow user to avoid inference issues in closures
+  const currentUser: UserProfile = user;
+
   const renderContent = () => {
     switch (activeTab) {
-      case Tab.DASHBOARD: return <Dashboard onNavigate={navigateToTab} user={user} lang={lang} />;
+      case Tab.DASHBOARD: return <Dashboard onNavigate={navigateToTab} user={currentUser} lang={lang} />;
       case Tab.COACH: return <Coach onAnalyze={() => updateStats('workouts')} lang={lang} currentView={coachSubView} setView={setCoachSubView} />;
-      case Tab.SOCIAL: return <Social user={user} onPost={() => updateStats('matches')} lang={lang} />;
+      case Tab.SOCIAL: return <Social user={currentUser} onPost={() => updateStats('matches')} lang={lang} />;
       case Tab.MAPS: return <Maps lang={lang} />;
       case Tab.SCOUT: return <Scout lang={lang} />;
       case Tab.CHAT: return <Chat onChat={() => updateStats('chats')} lang={lang} />;
-      default: return <Dashboard onNavigate={navigateToTab} user={user} lang={lang} />;
+      default: return <Dashboard onNavigate={navigateToTab} user={currentUser} lang={lang} />;
     }
   };
 
@@ -153,9 +358,11 @@ const App: React.FC = () => {
       activeTab={activeTab} 
       setActiveTab={navigateToTab} 
       lang={lang} 
-      setLang={(l) => { setLang(l); localStorage.setItem('sportbuddy_lang', l); }} 
+      // Fix: Explicitly type parameter 'l' as Language to avoid 'unknown' inference and cast to string for localStorage.setItem
+      setLang={(l: Language) => { setLang(l); localStorage.setItem('sportbuddy_lang', l as string); }} 
       theme={theme} 
       setTheme={setTheme}
+      onLogout={handleLogout}
     >
       <div className="animate-in fade-in duration-500">
         {renderContent()}

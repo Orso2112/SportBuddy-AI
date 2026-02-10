@@ -48,21 +48,21 @@ const Scout: React.FC<{ lang: Language }> = ({ lang }) => {
         </div>
       </div>
 
-      {showInfo && (
-        <div className="bg-gray-900 dark:bg-gray-800 p-6 rounded-[2rem] flex gap-5 relative animate-in fade-in slide-in-from-top-2 overflow-hidden shadow-xl">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
-          <div className="w-12 h-12 rounded-2xl bg-orange-500 flex items-center justify-center text-white shrink-0 shadow-lg shadow-orange-500/20">
-            <Trophy size={24} />
+      {showInfo && !report && (
+        <div className="bg-gray-900 dark:bg-gray-800 p-8 rounded-[3rem] flex gap-6 relative animate-in fade-in slide-in-from-top-4 overflow-hidden shadow-2xl border border-white/5">
+          <div className="absolute top-0 right-0 w-48 h-48 bg-orange-500/10 rounded-full blur-[60px] -mr-16 -mt-16"></div>
+          <div className="w-14 h-14 rounded-2xl bg-orange-500 flex items-center justify-center text-white shrink-0 shadow-2xl shadow-orange-500/30">
+            <Trophy size={30} />
           </div>
           <div className="flex-1">
-            <h4 className="text-sm font-black text-white uppercase tracking-widest mb-1">{lang === 'en' ? 'AI Scouting' : 'Scouting AI'}</h4>
-            <p className="text-[11px] text-gray-300 leading-relaxed font-medium">
+            <h4 className="text-base font-black text-white uppercase tracking-[0.2em] mb-2">{lang === 'en' ? 'AI Scouting' : 'Scouting AI'}</h4>
+            <p className="text-[12px] text-gray-300 leading-relaxed font-medium pr-8">
               {lang === 'en' 
                 ? "Upload match clips. Our professional AI engine identifies key moments and builds detailed performance reports automatically."
                 : "Carica le tue clip. Il nostro motore AI professionale identifica i momenti chiave e genera report di performance dettagliati."}
             </p>
           </div>
-          <button onClick={() => setShowInfo(false)} className="text-gray-500 hover:text-white transition-colors p-2 h-fit">
+          <button onClick={() => setShowInfo(false)} className="absolute top-6 right-6 text-gray-500 hover:text-white transition-colors p-2 bg-white/5 rounded-full">
             <X size={18} />
           </button>
         </div>

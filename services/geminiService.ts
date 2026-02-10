@@ -35,13 +35,15 @@ export const geminiService = {
       } 
     };
 
+    // Use gemini-3-flash-preview for vision/text tasks as per guidelines
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: {
         parts: [mediaPart, textPart]
       }
     });
-    return response.text;
+    // Ensure response.text is treated as string to avoid potential undefined issues in components
+    return response.text ?? '';
   },
 
   // Smart Venues - Mapping with Grounding using Gemini 2.5 series
@@ -76,6 +78,7 @@ export const geminiService = {
       };
     }
 
+    // Gemini 2.5 Flash is required for Maps Grounding as per guidelines
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: content,
@@ -83,7 +86,7 @@ export const geminiService = {
     });
     
     return {
-      text: response.text,
+      text: response.text ?? '',
       grounding: response.candidates?.[0]?.groundingMetadata?.groundingChunks || []
     };
   },
@@ -91,6 +94,7 @@ export const geminiService = {
   // Auto-Scouting (Video/Stat Extraction) using Gemini 3 Flash
   analyzeScouting: async (base64Image: string, lang: string) => {
     const promptLang = lang === 'it' ? 'RISPONDI ESCLUSIVAMENTE IN ITALIANO.' : 'RESPOND EXCLUSIVELY IN ENGLISH.';
+    // Use gemini-3-flash-preview for complex reasoning tasks
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: {
@@ -103,7 +107,7 @@ export const geminiService = {
         ]
       }
     });
-    return response.text;
+    return response.text ?? '';
   },
 
   // General AI Chatbot using Gemini 3 Pro
@@ -119,6 +123,6 @@ export const geminiService = {
       }
     });
     const response = await chat.sendMessage({ message });
-    return response.text;
+    return response.text ?? '';
   }
 };

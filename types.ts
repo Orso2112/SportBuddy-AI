@@ -17,10 +17,16 @@ export interface UserStats {
   chats: number;
 }
 
-export interface UserProfile {
-  name: string;
+export interface UserSport {
   sport: string;
   level: string;
+}
+
+export interface UserProfile {
+  name: string;
+  email: string;
+  password?: string; // Stored for simulation purposes
+  selectedSports: UserSport[];
   avatar: string;
   stats: UserStats;
 }
@@ -42,17 +48,11 @@ export interface VenueInfo {
   type: string;
 }
 
-/**
- * Represents a physical exercise for the AI Coach.
- */
 export interface Exercise {
   name: string;
   category: string;
 }
 
-/**
- * Represents a logged workout entry.
- */
 export interface WorkoutLog {
   id: string;
   exercise: string;
