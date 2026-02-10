@@ -1,0 +1,9 @@
+{
+  "name": "SportBuddy AI",
+  "description": "An integrated sports platform using Gemini AI for real-time coaching, smart venue discovery, scouting, and social matchmaking.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
