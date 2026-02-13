@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from "@google/genai";
 
 // Always use the prescribed initialization pattern with the API key from environment variables.
@@ -51,17 +50,21 @@ export const geminiService = {
     const promptLang = lang === 'it' ? 'RISPONDI ESCLUSIVAMENTE IN ITALIANO.' : 'RESPOND EXCLUSIVELY IN ENGLISH.';
     
     let content = `${promptLang} 
-      Find REAL and EXISTING public sports facilities in this area.
+      Search for REAL and EXISTING public sports facilities strictly within a 5 km radius of the provided coordinates or location.
       - Use ## for the names of the venues.
-      - Use **bold text** to emphasize sports types or key details (e.g. **Basketball**, **Free Entry**).
-      Look for: basketball courts, volleyball courts, football/soccer fields, rugby pitches, tennis courts, padel courts, golf courses, bowling alleys, public outdoor gyms, skateparks, and swimming pools.
+      - Use **bold text** for sports types (e.g. **Basketball**, **Football**).
+      Include: basketball courts, football fields, tennis courts, padel, gyms, skateparks, and swimming pools.
+      
+      CRITICAL: For EVERY venue found, you MUST provide its exact latitude and longitude in this specific format at the end of its name or first paragraph: [COORDINATES: LAT, LNG]
+      Example: ## Central Park Basketball Court [COORDINATES: 40.78509, -73.96828]
+      
       STRICT RULES:
-      1. ONLY include places where people go specifically to DO SPORTS.
-      2. EXCLUDE: Zoos, generic museums, generic parks WITHOUT sports equipment.
-      3. For each venue, provide a name, its sport specialty, and a brief access note.
-      You MUST use the Google Maps tool to verify the existence of these places near the target.`;
+      1. ONLY include places within 5 km.
+      2. ONLY include sports venues.
+      3. Use the Google Maps tool to verify the location and coordinates.`;
     
-    if (location) content += `Target location: ${location}. `;
+    if (location) content += ` Target location: ${location}.`;
+    if (coords) content += ` The user is currently at Latitude: ${coords.lat}, Longitude: ${coords.lng}.`;
     
     const config: any = {
       tools: [{ googleMaps: {} }],

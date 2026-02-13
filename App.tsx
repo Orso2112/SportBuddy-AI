@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import { Tab, UserProfile, Language, Theme, UserSport } from './types';
@@ -37,7 +38,8 @@ const App: React.FC = () => {
     const savedLang = localStorage.getItem('sportbuddy_lang') as Language;
     const savedTheme = localStorage.getItem('sportbuddy_theme') as Theme;
     
-    if (savedUser) setUser(JSON.parse(savedUser));
+    // Explicitly cast JSON.parse result to UserProfile to avoid unknown/any issues
+    if (savedUser) setUser(JSON.parse(savedUser) as UserProfile);
     if (savedLang) setLang(savedLang);
     if (savedTheme) setTheme(savedTheme);
     
@@ -46,7 +48,8 @@ const App: React.FC = () => {
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
-    localStorage.setItem('sportbuddy_theme', theme);
+    // Ensure theme value is explicitly treated as string for localStorage
+    localStorage.setItem('sportbuddy_theme', String(theme));
   }, [theme]);
 
   const t = translations[lang];
@@ -92,7 +95,8 @@ const App: React.FC = () => {
     e.preventDefault();
     const savedUserAuth = localStorage.getItem(`user_auth_${loginEmail}`);
     if (savedUserAuth) {
-      const parsed: UserProfile = JSON.parse(savedUserAuth);
+      // Explicitly cast JSON.parse result to UserProfile
+      const parsed: UserProfile = JSON.parse(savedUserAuth) as UserProfile;
       if (parsed.password === loginPassword) {
         setUser(parsed);
         localStorage.setItem('sportbuddy_user', JSON.stringify(parsed));
@@ -111,17 +115,18 @@ const App: React.FC = () => {
     localStorage.removeItem('sportbuddy_user');
   };
 
+  // Fixed: renamed currentUser to avoid confusion and ensured strict typing
   const updateStats = (key: keyof UserProfile['stats']) => {
-    const currentUser = user;
-    if (!currentUser) return;
+    const activeUser = user;
+    if (!activeUser) return;
     
     const updatedUser: UserProfile = {
-      ...currentUser,
-      stats: { ...currentUser.stats, [key]: currentUser.stats[key] + 1 }
+      ...activeUser,
+      stats: { ...activeUser.stats, [key]: activeUser.stats[key] + 1 }
     };
     setUser(updatedUser);
     localStorage.setItem('sportbuddy_user', JSON.stringify(updatedUser));
-    localStorage.setItem(`user_auth_${currentUser.email}`, JSON.stringify(updatedUser));
+    localStorage.setItem(`user_auth_${activeUser.email}`, JSON.stringify(updatedUser));
   };
 
   const navigateToTab = (tab: Tab, subView: 'main' | 'history' = 'main') => {
@@ -339,7 +344,7 @@ const App: React.FC = () => {
   }
 
   // Explicitly narrow user to avoid inference issues in closures
-  const currentUser: UserProfile = user;
+  const currentUser: UserProfile = user as UserProfile;
 
   const renderContent = () => {
     switch (activeTab) {
@@ -358,10 +363,11 @@ const App: React.FC = () => {
       activeTab={activeTab} 
       setActiveTab={navigateToTab} 
       lang={lang} 
-      // Fix: Explicitly type parameter 'l' as Language to avoid 'unknown' inference and cast to string for localStorage.setItem
+      // Fixed: explicitly ensuring the argument 'l' is treated as a string to resolve unknown type issues in localStorage.setItem
       setLang={(l: Language) => { setLang(l); localStorage.setItem('sportbuddy_lang', l as string); }} 
       theme={theme} 
-      setTheme={setTheme}
+      // Fix: Use an explicit callback to resolve Dispatch type inference compatibility with LayoutProps.setTheme
+      setTheme={(t: Theme) => setTheme(t)}
       onLogout={handleLogout}
     >
       <div className="animate-in fade-in duration-500">
