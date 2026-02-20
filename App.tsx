@@ -250,19 +250,20 @@ const App: React.FC = () => {
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 max-h-[140px] overflow-y-auto no-scrollbar p-1">
                   {sportsList.map(([key, label]) => {
-                    const isSelected = regSports.includes(label);
+                    const sportLabel = label as string;
+                    const isSelected = regSports.includes(sportLabel);
                     return (
                       <button
                         key={key}
                         type="button"
-                        onClick={() => toggleSportSelection(label)}
+                        onClick={() => toggleSportSelection(sportLabel)}
                         className={`px-3 py-3 rounded-xl text-[9px] font-bold uppercase tracking-tight transition-all border-2 text-center truncate ${
                           isSelected 
                           ? 'bg-blue-600 border-blue-600 text-white shadow-lg' 
                           : (theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-500 hover:border-gray-600' : 'bg-white border-gray-100 text-gray-400 hover:border-blue-200')
                         }`}
                       >
-                        {label}
+                        {sportLabel}
                       </button>
                     );
                   })}

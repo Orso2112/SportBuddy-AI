@@ -14,6 +14,8 @@ const Logo: React.FC<LogoProps> = ({ className = '', size = 'md', showText = tru
     lg: { icon: 64, text: 'text-3xl' }
   };
 
+  const logoId = React.useId().replace(/:/g, '');
+
   return (
     <div className={`flex items-center gap-3 ${className}`}>
       <div className="relative group">
@@ -21,7 +23,7 @@ const Logo: React.FC<LogoProps> = ({ className = '', size = 'md', showText = tru
         <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
         
         {/* Main Icon */}
-        <div className={`relative ${size === 'lg' ? 'p-4' : 'p-2'} bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-white/20`}>
+        <div className={`relative ${size === 'lg' ? 'p-4' : 'p-2'} bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700`}>
           <svg 
             width={sizes[size].icon} 
             height={sizes[size].icon} 
@@ -32,7 +34,7 @@ const Logo: React.FC<LogoProps> = ({ className = '', size = 'md', showText = tru
             {/* Hexagonal Base */}
             <path 
               d="M50 5L89.641 27.5V72.5L50 95L10.359 72.5V27.5L50 5Z" 
-              fill="url(#logo_gradient)" 
+              fill={`url(#${logoId})`} 
             />
             {/* Dynamic Swoosh */}
             <path 
@@ -45,7 +47,7 @@ const Logo: React.FC<LogoProps> = ({ className = '', size = 'md', showText = tru
             <circle cx="50" cy="50" r="12" stroke="white" strokeWidth="2" strokeOpacity="0.3" />
             
             <defs>
-              <linearGradient id="logo_gradient" x1="10.359" y1="5" x2="89.641" y2="95" gradientUnits="userSpaceOnUse">
+              <linearGradient id={logoId} x1="10.359" y1="5" x2="89.641" y2="95" gradientUnits="userSpaceOnUse">
                 <stop stopColor="#2563EB" />
                 <stop offset="1" stopColor="#4F46E5" />
               </linearGradient>
