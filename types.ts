@@ -5,7 +5,8 @@ export enum Tab {
   SOCIAL = 'SOCIAL',
   MAPS = 'MAPS',
   SCOUT = 'SCOUT',
-  CHAT = 'CHAT'
+  CHAT = 'CHAT',
+  GAMES_JOINED = 'GAMES_JOINED'
 }
 
 export type Language = 'en' | 'it';
@@ -34,10 +35,15 @@ export interface UserProfile {
 export interface MatchAd {
   id: string;
   creator: string;
+  creatorEmail: string;
   sport: string;
   location: string;
   time: string;
   needed: number;
+  initialNeeded: number;
+  requests: string[]; // List of user emails
+  joinedPlayers: string[]; // List of user emails
+  status: 'OPEN' | 'FULL';
 }
 
 export interface VenueInfo {

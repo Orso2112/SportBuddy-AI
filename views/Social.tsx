@@ -50,15 +50,30 @@ const Social: React.FC<SocialProps> = ({ user, onPost, lang }) => {
     }
   }, [showModal, user.selectedSports, t.sports]);
 
+  const [showManageModal, setShowManageModal] = useState<MatchAd | null>(null);
+  const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
   const handleAddAd = (e: React.FormEvent) => {
     e.preventDefault();
     const newAd: MatchAd = {
       id: Date.now().toString(),
       creator: user.name,
+      creatorEmail: user.email,
       sport: formSport,
       location: formLocation,
       time: formTime,
       needed: formNeeded,
+      initialNeeded: formNeeded,
+      requests: [],
+      joinedPlayers: [],
+      status: 'OPEN',
     };
     const updated = [newAd, ...ads];
     setAds(updated);
@@ -66,6 +81,51 @@ const Social: React.FC<SocialProps> = ({ user, onPost, lang }) => {
     setShowModal(false);
     resetForm();
     onPost();
+  };
+
+  const handleRequestToJoin = (adId: string) => {
+    const updatedAds = ads.map(ad => {
+      if (ad.id === adId) {
+        const requests = ad.requests || [];
+        const joinedPlayers = ad.joinedPlayers || [];
+        if (requests.includes(user.email) || joinedPlayers.includes(user.email)) return ad;
+        return { ...ad, requests: [...requests, user.email] };
+      }
+      return ad;
+    });
+    setAds(updatedAds);
+    localStorage.setItem('sportbuddy_ads', JSON.stringify(updatedAds));
+    setToast({ message: t.success_join, type: 'success' });
+  };
+
+  const handleAcceptPlayer = (adId: string, playerEmail: string) => {
+    const updatedAds = ads.map(ad => {
+      if (ad.id === adId) {
+        const joinedPlayers = ad.joinedPlayers || [];
+        const requests = ad.requests || [];
+        const newJoined = [...joinedPlayers, playerEmail];
+        const newRequests = requests.filter(e => e !== playerEmail);
+        const newNeeded = ad.needed - 1;
+        const newStatus = newNeeded === 0 ? 'FULL' : 'OPEN';
+        
+        const updatedAd = { 
+          ...ad, 
+          joinedPlayers: newJoined, 
+          requests: newRequests,
+          needed: newNeeded,
+          status: newStatus as 'OPEN' | 'FULL'
+        };
+        
+        if (showManageModal?.id === adId) {
+          setShowManageModal(updatedAd);
+        }
+        
+        return updatedAd;
+      }
+      return ad;
+    });
+    setAds(updatedAds);
+    localStorage.setItem('sportbuddy_ads', JSON.stringify(updatedAds));
   };
 
   const resetForm = () => {
@@ -113,7 +173,16 @@ const Social: React.FC<SocialProps> = ({ user, onPost, lang }) => {
     }
   };
 
-  const filteredAds = filter === 'ALL' ? ads : ads.filter(ad => ad.sport === filter);
+  const filteredAds = ads.filter(ad => {
+    // Only show OPEN ads in Social tab
+    if (ad.status === 'FULL') return false;
+    
+    // Apply category filter
+    if (filter !== 'ALL' && ad.sport !== filter) return false;
+    
+    return true;
+  });
+
   const sportLabels = Object.values(t.sports) as string[];
 
   const getSportVisual = (sportName: string) => {
@@ -133,6 +202,16 @@ const Social: React.FC<SocialProps> = ({ user, onPost, lang }) => {
 
   return (
     <div className="space-y-8 max-w-2xl mx-auto pb-10">
+      {/* Toast Notification */}
+      {toast && (
+        <div className={`fixed top-20 right-4 z-[200] px-6 py-4 rounded-2xl shadow-2xl animate-in slide-in-from-right duration-300 ${toast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>
+          <div className="flex items-center gap-3">
+            {toast.type === 'success' ? <Sparkles size={20} /> : <X size={20} />}
+            <span className="font-black text-xs uppercase tracking-widest">{toast.message}</span>
+          </div>
+        </div>
+      )}
+
       <div className="flex justify-between items-center px-2">
         <div>
           <h2 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight leading-none uppercase">Match Ads</h2>
@@ -205,6 +284,9 @@ const Social: React.FC<SocialProps> = ({ user, onPost, lang }) => {
           filteredAds.map((ad) => {
             const visual = getSportVisual(ad.sport);
             const SportIcon = visual.icon;
+            const isCreator = user.email === ad.creatorEmail;
+            const hasRequested = ad.requests?.includes(user.email);
+            const hasJoined = ad.joinedPlayers?.includes(user.email);
             
             return (
               <div key={ad.id} className="bg-white dark:bg-gray-900 p-8 rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 hover:border-blue-400 dark:hover:border-blue-500 transition-all group animate-in slide-in-from-bottom duration-500 hover:shadow-2xl">
@@ -239,21 +321,104 @@ const Social: React.FC<SocialProps> = ({ user, onPost, lang }) => {
                   </div>
                 </div>
 
-                <button className="w-full py-5 bg-blue-600 text-white rounded-[1.75rem] font-black text-xs uppercase tracking-[0.2em] hover:bg-blue-700 shadow-xl shadow-blue-600/10 active:scale-95 transition-all border-b-4 border-blue-800">
-                  {t.join_match}
-                </button>
+                {isCreator ? (
+                  <button 
+                    onClick={() => setShowManageModal(ad)}
+                    className="w-full py-5 bg-indigo-600 text-white rounded-[1.75rem] font-black text-xs uppercase tracking-[0.2em] hover:bg-indigo-700 shadow-xl shadow-indigo-600/10 active:scale-95 transition-all border-b-4 border-indigo-800 flex items-center justify-center gap-2"
+                  >
+                    <UsersIcon size={16} />
+                    {t.joined_players}
+                  </button>
+                ) : hasJoined ? (
+                  <button 
+                    disabled
+                    className="w-full py-5 bg-emerald-500/20 text-emerald-500 rounded-[1.75rem] font-black text-xs uppercase tracking-[0.2em] border border-emerald-500/30 flex items-center justify-center gap-2"
+                  >
+                    <Medal size={16} />
+                    {t.joined}
+                  </button>
+                ) : hasRequested ? (
+                  <button 
+                    disabled
+                    className="w-full py-5 bg-gray-100 dark:bg-gray-800 text-gray-400 rounded-[1.75rem] font-black text-xs uppercase tracking-[0.2em] border border-gray-200 dark:border-gray-700 flex items-center justify-center gap-2"
+                  >
+                    <Clock size={16} />
+                    {t.requested}
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => handleRequestToJoin(ad.id)}
+                    className="w-full py-5 bg-blue-600 text-white rounded-[1.75rem] font-black text-xs uppercase tracking-[0.2em] hover:bg-blue-700 shadow-xl shadow-blue-600/10 active:scale-95 transition-all border-b-4 border-blue-800"
+                  >
+                    {t.join_match}
+                  </button>
+                )}
               </div>
             );
           })
         )}
       </div>
 
+      {/* Manage Players Modal */}
+      {showManageModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[100] flex items-center justify-center p-4">
+          <div className="bg-gray-900 rounded-[3rem] w-full max-w-sm max-h-[80vh] shadow-2xl border border-white/10 flex flex-col overflow-hidden">
+            <div className="p-8 border-b border-white/5 flex justify-between items-center">
+              <div>
+                <h3 className="text-xl font-black text-white uppercase tracking-tight">{t.joined_players}</h3>
+                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">{showManageModal.sport} • {showManageModal.time}</p>
+              </div>
+              <button onClick={() => setShowManageModal(null)} className="text-gray-400 hover:text-white p-2">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-8 space-y-6">
+              {/* Joined List */}
+              <div className="space-y-3">
+                <span className="text-[9px] font-black uppercase tracking-widest text-emerald-500">{t.joined} ({(showManageModal.joinedPlayers || []).length}/{showManageModal.initialNeeded})</span>
+                {(!showManageModal.joinedPlayers || showManageModal.joinedPlayers.length === 0) ? (
+                  <p className="text-[10px] text-gray-600 font-bold uppercase italic">No one joined yet</p>
+                ) : (
+                  showManageModal.joinedPlayers.map(email => (
+                    <div key={email} className="flex items-center justify-between bg-white/5 p-4 rounded-2xl border border-white/5">
+                      <span className="text-xs font-bold text-white truncate">{email}</span>
+                      <Medal size={14} className="text-emerald-500" />
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Requests List */}
+              <div className="space-y-3">
+                <span className="text-[9px] font-black uppercase tracking-widest text-blue-500">Requests</span>
+                {(!showManageModal.requests || showManageModal.requests.length === 0) ? (
+                  <p className="text-[10px] text-gray-600 font-bold uppercase italic">No pending requests</p>
+                ) : (
+                  showManageModal.requests.map(email => (
+                    <div key={email} className="flex items-center justify-between bg-white/5 p-4 rounded-2xl border border-white/5">
+                      <span className="text-xs font-bold text-white truncate">{email}</span>
+                      <button 
+                        onClick={() => handleAcceptPlayer(showManageModal.id, email)}
+                        className="bg-blue-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-colors"
+                      >
+                        {t.accept}
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[100] flex items-center justify-center p-4">
-          <div className="bg-gray-900 dark:bg-gray-900 rounded-[3rem] p-10 w-full max-w-sm shadow-[0_0_80px_-10px_rgba(37,99,235,0.3)] animate-in zoom-in-95 duration-500 border border-white/10 relative overflow-hidden">
+          <div className="bg-gray-900 dark:bg-gray-900 rounded-[3rem] w-full max-w-sm max-h-[90vh] shadow-[0_0_80px_-10px_rgba(37,99,235,0.3)] animate-in zoom-in-95 duration-500 border border-white/10 relative flex flex-col overflow-hidden">
             <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/10 rounded-full blur-[60px] -mr-10 -mt-10"></div>
             
-            <div className="flex justify-between items-center mb-10 relative">
+            <div className="flex justify-between items-center p-10 pb-6 relative shrink-0">
               <div>
                 <h3 className="text-2xl font-black text-white tracking-tight uppercase leading-none">{t.create_match}</h3>
                 <p className="text-[10px] text-blue-500 font-bold uppercase tracking-[0.2em] mt-2">New Announcement</p>
@@ -263,128 +428,130 @@ const Social: React.FC<SocialProps> = ({ user, onPost, lang }) => {
               </button>
             </div>
 
-            <form onSubmit={handleAddAd} className="space-y-8 relative">
-              <div>
-                <label className="block text-[10px] font-black uppercase text-gray-500 tracking-[0.25em] mb-3 px-1">{t.sport}</label>
-                <div className="relative group">
-                  <select 
-                    value={formSport}
-                    onChange={(e) => setFormSport(e.target.value)}
-                    className="w-full bg-white/5 text-white border border-white/10 rounded-2xl px-6 py-5 outline-none focus:ring-2 focus:ring-blue-500 shadow-inner appearance-none font-bold text-sm tracking-tight transition-all cursor-pointer hover:bg-white/10"
-                  >
-                    {(user.selectedSports.length > 0 ? user.selectedSports.map(s => s.sport) : sportLabels).map((s) => (
-                      <option key={s} value={s} className="bg-gray-900 text-white">{s}</option>
-                    ))}
-                  </select>
-                  <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500 group-hover:text-white transition-colors">
-                    <ChevronRight size={18} className="rotate-90" />
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <div className="flex justify-between items-center mb-3 px-1">
-                  <label className="block text-[10px] font-black uppercase text-gray-500 tracking-[0.25em]">{t.location}</label>
-                  <button 
-                    type="button" 
-                    onClick={fetchNearbyVenues}
-                    className="text-[9px] font-black uppercase text-blue-500 tracking-widest hover:text-blue-400 flex items-center gap-1 group transition-all"
-                  >
-                    <LocateFixed size={12} className="group-hover:rotate-12 transition-transform" />
-                    {lang === 'en' ? 'Suggest Nearby' : 'Suggerisci Vicini'}
-                  </button>
-                </div>
-                <div className="relative group">
-                  <MapPin className="absolute left-6 top-1/2 -translate-y-1/2 text-blue-500 group-focus-within:scale-110 transition-transform" size={18} />
-                  <input 
-                    value={formLocation}
-                    onChange={(e) => setFormLocation(e.target.value)}
-                    required 
-                    className="w-full bg-white/5 text-white border border-white/10 rounded-2xl pl-14 pr-6 py-5 outline-none focus:ring-2 focus:ring-blue-500 shadow-inner font-bold text-sm tracking-tight placeholder-gray-600 transition-all hover:bg-white/10" 
-                    placeholder="e.g. Central Park Court" 
-                  />
-                </div>
-                
-                {/* Real venue suggestions dropdown with scrollable height */}
-                {isFetchingVenues ? (
-                  <div className="mt-3 flex items-center justify-center py-4 bg-white/5 rounded-2xl border border-white/5">
-                    <Loader2 size={16} className="animate-spin text-blue-500 mr-2" />
-                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 animate-pulse">Scanning area...</span>
-                  </div>
-                ) : venueSuggestions.length > 0 && (
-                  <div className="mt-3 grid grid-cols-1 gap-2 max-h-[160px] overflow-y-auto no-scrollbar pr-1 animate-in fade-in slide-in-from-top-2">
-                    <div className="flex items-center gap-2 mb-1 px-1 sticky top-0 bg-gray-900 py-1 z-10">
-                      <Sparkles size={12} className="text-blue-500" />
-                      <span className="text-[8px] font-black uppercase tracking-[0.2em] text-gray-600">Verified Nearby Places</span>
-                    </div>
-                    {venueSuggestions.map((venue, idx) => (
-                      <button 
-                        key={idx}
-                        type="button"
-                        onClick={() => setFormLocation(venue)}
-                        className="text-left px-5 py-3.5 bg-white/5 hover:bg-blue-600/20 text-blue-400 border border-white/5 rounded-xl transition-all flex items-center gap-3 active:scale-95 group shrink-0"
-                      >
-                        <div className="w-6 h-6 rounded-lg bg-blue-500/10 flex items-center justify-center group-hover:bg-blue-500/30 transition-all">
-                          <Navigation size={12} />
-                        </div>
-                        <span className="text-[11px] font-black uppercase tracking-tighter truncate">{venue}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-6">
+            <div className="flex-1 overflow-y-auto no-scrollbar p-10 pt-0 relative">
+              <form onSubmit={handleAddAd} className="space-y-8">
                 <div>
-                  <label className="block text-[10px] font-black uppercase text-gray-500 tracking-[0.25em] mb-3 px-1">{t.time}</label>
+                  <label className="block text-[10px] font-black uppercase text-gray-500 tracking-[0.25em] mb-3 px-1">{t.sport}</label>
                   <div className="relative group">
-                    <Clock className="absolute left-5 top-1/2 -translate-y-1/2 text-indigo-500 pointer-events-none group-focus-within:scale-110 transition-transform" size={18} />
+                    <select 
+                      value={formSport}
+                      onChange={(e) => setFormSport(e.target.value)}
+                      className="w-full bg-white/5 text-white border border-white/10 rounded-2xl px-6 py-5 outline-none focus:ring-2 focus:ring-blue-500 shadow-inner appearance-none font-bold text-sm tracking-tight transition-all cursor-pointer hover:bg-white/10"
+                    >
+                      {(user.selectedSports.length > 0 ? user.selectedSports.map(s => s.sport) : sportLabels).map((s) => (
+                        <option key={s} value={s} className="bg-gray-900 text-white">{s}</option>
+                      ))}
+                    </select>
+                    <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500 group-hover:text-white transition-colors">
+                      <ChevronRight size={18} className="rotate-90" />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between items-center mb-3 px-1">
+                    <label className="block text-[10px] font-black uppercase text-gray-500 tracking-[0.25em]">{t.location}</label>
+                    <button 
+                      type="button" 
+                      onClick={fetchNearbyVenues}
+                      className="text-[9px] font-black uppercase text-blue-500 tracking-widest hover:text-blue-400 flex items-center gap-1 group transition-all"
+                    >
+                      <LocateFixed size={12} className="group-hover:rotate-12 transition-transform" />
+                      {lang === 'en' ? 'Suggest Nearby' : 'Suggerisci Vicini'}
+                    </button>
+                  </div>
+                  <div className="relative group">
+                    <MapPin className="absolute left-6 top-1/2 -translate-y-1/2 text-blue-500 group-focus-within:scale-110 transition-transform" size={18} />
                     <input 
-                      type="time" 
-                      value={formTime}
-                      onChange={(e) => setFormTime(e.target.value)}
+                      value={formLocation}
+                      onChange={(e) => setFormLocation(e.target.value)}
                       required 
-                      className="w-full bg-white/5 text-white border border-white/10 rounded-2xl pl-12 pr-4 py-5 outline-none focus:ring-2 focus:ring-blue-500 shadow-inner font-bold text-sm tracking-tighter appearance-none hover:bg-white/10 transition-all cursor-pointer" 
+                      className="w-full bg-white/5 text-white border border-white/10 rounded-2xl pl-14 pr-6 py-5 outline-none focus:ring-2 focus:ring-blue-500 shadow-inner font-bold text-sm tracking-tight placeholder-gray-600 transition-all hover:bg-white/10" 
+                      placeholder="e.g. Central Park Court" 
                     />
                   </div>
+                  
+                  {/* Real venue suggestions dropdown with scrollable height */}
+                  {isFetchingVenues ? (
+                    <div className="mt-3 flex items-center justify-center py-4 bg-white/5 rounded-2xl border border-white/5">
+                      <Loader2 size={16} className="animate-spin text-blue-500 mr-2" />
+                      <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 animate-pulse">Scanning area...</span>
+                    </div>
+                  ) : venueSuggestions.length > 0 && (
+                    <div className="mt-3 grid grid-cols-1 gap-2 max-h-[160px] overflow-y-auto no-scrollbar pr-1 animate-in fade-in slide-in-from-top-2">
+                      <div className="flex items-center gap-2 mb-1 px-1 sticky top-0 bg-gray-900 py-1 z-10">
+                        <Sparkles size={12} className="text-blue-500" />
+                        <span className="text-[8px] font-black uppercase tracking-[0.2em] text-gray-600">Verified Nearby Places</span>
+                      </div>
+                      {venueSuggestions.map((venue, idx) => (
+                        <button 
+                          key={idx}
+                          type="button"
+                          onClick={() => setFormLocation(venue)}
+                          className="text-left px-5 py-3.5 bg-white/5 hover:bg-blue-600/20 text-blue-400 border border-white/5 rounded-xl transition-all flex items-center gap-3 active:scale-95 group shrink-0"
+                        >
+                          <div className="w-6 h-6 rounded-lg bg-blue-500/10 flex items-center justify-center group-hover:bg-blue-500/30 transition-all">
+                            <Navigation size={12} />
+                          </div>
+                          <span className="text-[11px] font-black uppercase tracking-tighter truncate">{venue}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <label className="block text-[10px] font-black uppercase text-gray-500 tracking-[0.25em] mb-3 px-1">{lang === 'en' ? 'Needed' : 'Necessari'}</label>
-                  <div className="flex items-center bg-white/5 border border-white/10 rounded-2xl overflow-hidden shadow-inner h-full group hover:bg-white/10 transition-all">
-                    <button 
-                      type="button" 
-                      onClick={() => setFormNeeded(prev => Math.max(1, prev - 1))}
-                      className="flex-1 flex items-center justify-center py-5 text-gray-500 hover:text-white transition-colors"
-                    >
-                      <Minus size={16} />
-                    </button>
-                    <span className="w-12 text-center text-white font-black text-base">{formNeeded}</span>
-                    <button 
-                      type="button" 
-                      onClick={() => setFormNeeded(prev => prev + 1)}
-                      className="flex-1 flex items-center justify-center py-5 text-gray-500 hover:text-white transition-colors"
-                    >
-                      <Plus size={16} />
-                    </button>
-                  </div>
-                </div>
-              </div>
 
-              <div className="pt-6">
-                <button 
-                  type="submit" 
-                  disabled={!formLocation.trim() || !formSport}
-                  className="w-full relative group/publish overflow-hidden rounded-[2rem] active:scale-95 transition-all shadow-2xl shadow-blue-500/30 disabled:opacity-50"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-tr from-blue-700 via-blue-600 to-indigo-500 group-hover/publish:scale-110 transition-transform duration-700"></div>
-                  <div className="relative py-6 flex items-center justify-center gap-3">
-                    <span className="text-[13px] font-black uppercase tracking-[0.35em] text-white drop-shadow-lg">{t.publish}</span>
-                    <Sparkles size={18} className="text-white/80 group-hover/publish:rotate-12 transition-transform" />
+                <div className="grid grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-[10px] font-black uppercase text-gray-500 tracking-[0.25em] mb-3 px-1">{t.time}</label>
+                    <div className="relative group">
+                      <Clock className="absolute left-5 top-1/2 -translate-y-1/2 text-indigo-500 pointer-events-none group-focus-within:scale-110 transition-transform" size={18} />
+                      <input 
+                        type="time" 
+                        value={formTime}
+                        onChange={(e) => setFormTime(e.target.value)}
+                        required 
+                        className="w-full bg-white/5 text-white border border-white/10 rounded-2xl pl-12 pr-4 py-5 outline-none focus:ring-2 focus:ring-blue-500 shadow-inner font-bold text-sm tracking-tighter appearance-none hover:bg-white/10 transition-all cursor-pointer" 
+                      />
+                    </div>
                   </div>
-                  <div className="absolute bottom-0 left-0 w-full h-1 bg-blue-400/30"></div>
-                </button>
-              </div>
-            </form>
+                  <div>
+                    <label className="block text-[10px] font-black uppercase text-gray-500 tracking-[0.25em] mb-3 px-1">{lang === 'en' ? 'Needed' : 'Necessari'}</label>
+                    <div className="flex items-center bg-white/5 border border-white/10 rounded-2xl overflow-hidden shadow-inner h-full group hover:bg-white/10 transition-all">
+                      <button 
+                        type="button" 
+                        onClick={() => setFormNeeded(prev => Math.max(1, prev - 1))}
+                        className="flex-1 flex items-center justify-center py-5 text-gray-500 hover:text-white transition-colors"
+                      >
+                        <Minus size={16} />
+                      </button>
+                      <span className="w-12 text-center text-white font-black text-base">{formNeeded}</span>
+                      <button 
+                        type="button" 
+                        onClick={() => setFormNeeded(prev => prev + 1)}
+                        className="flex-1 flex items-center justify-center py-5 text-gray-500 hover:text-white transition-colors"
+                      >
+                        <Plus size={16} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-6 pb-4">
+                  <button 
+                    type="submit" 
+                    disabled={!formLocation.trim() || !formSport}
+                    className="w-full relative group/publish overflow-hidden rounded-[2rem] active:scale-95 transition-all shadow-2xl shadow-blue-500/30 disabled:opacity-50"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-tr from-blue-700 via-blue-600 to-indigo-500 group-hover/publish:scale-110 transition-transform duration-700"></div>
+                    <div className="relative py-6 flex items-center justify-center gap-3">
+                      <span className="text-[13px] font-black uppercase tracking-[0.35em] text-white drop-shadow-lg">{t.publish}</span>
+                      <Sparkles size={18} className="text-white/80 group-hover/publish:rotate-12 transition-transform" />
+                    </div>
+                    <div className="absolute bottom-0 left-0 w-full h-1 bg-blue-400/30"></div>
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}

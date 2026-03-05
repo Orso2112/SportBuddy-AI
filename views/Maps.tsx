@@ -27,56 +27,92 @@ const Maps: React.FC<{ lang: Language }> = ({ lang }) => {
   const mapRef = useRef<any>(null);
   const markersLayerRef = useRef<any>(null);
 
+  const [mapReady, setMapReady] = useState(false);
+
   // Initialize Map
   useEffect(() => {
-    if (!mapContainerRef.current || mapRef.current) return;
+    let isMounted = true;
+    let retryCount = 0;
+    const maxRetries = 20;
 
-    const L = (window as any).L;
-    if (!L) return;
+    const initMap = () => {
+      if (!isMounted) return;
+      
+      const L = (window as any).L;
+      if (!L || !mapContainerRef.current) {
+        if (retryCount < maxRetries) {
+          retryCount++;
+          setTimeout(initMap, 200);
+        } else {
+          setError(lang === 'it' ? 'Errore nel caricamento della mappa.' : 'Error loading map library.');
+        }
+        return;
+      }
 
-    // Use a darker tile layer for a premium feel
-    mapRef.current = L.map(mapContainerRef.current, {
-      zoomControl: false,
-      scrollWheelZoom: true,
-    }).setView([41.9028, 12.4964], 6); // Default to Italy if no coords initially
+      if (mapRef.current) return;
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
-    }).addTo(mapRef.current);
+      try {
+        // Initialize map
+        const map = L.map(mapContainerRef.current, {
+          zoomControl: false,
+          scrollWheelZoom: true,
+          fadeAnimation: true
+        }).setView([41.9028, 12.4964], 6);
 
-    markersLayerRef.current = L.layerGroup().addTo(mapRef.current);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+          attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+        }).addTo(map);
+
+        markersLayerRef.current = L.layerGroup().addTo(map);
+        mapRef.current = map;
+        
+        setMapReady(true);
+        
+        // Force a resize check after a short delay to ensure container is fully rendered
+        setTimeout(() => {
+          if (mapRef.current) {
+            mapRef.current.invalidateSize();
+          }
+        }, 300);
+      } catch (err) {
+        console.error("Map initialization failed:", err);
+        setError(lang === 'it' ? 'Impossibile inizializzare la mappa.' : 'Failed to initialize map.');
+      }
+    };
+
+    initMap();
 
     return () => {
+      isMounted = false;
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;
+        markersLayerRef.current = null;
+        setMapReady(false);
       }
     };
-  }, []);
+  }, [lang]);
 
-  // Parse venues from AI text results whenever the results state updates
+  // Parse venues from AI text results
   useEffect(() => {
     if (!results?.text) return;
 
     const parsedVenues: Venue[] = [];
-    // Split by Markdown headers (## Name)
     const sections = results.text.split(/##\s+/);
     
     sections.forEach(section => {
       if (!section.trim()) return;
       
-      // Look for [COORDINATES: LAT, LNG] in the text
       const coordMatch = section.match(/\[COORDINATES:\s*(-?\d+\.?\d*),\s*(-?\d+\.?\d*)\]/);
       if (coordMatch) {
         const lat = parseFloat(coordMatch[1]);
         const lng = parseFloat(coordMatch[2]);
         
-        // The name is the part before the coordinates on the first line
         const firstLine = section.split('\n')[0].trim();
         const name = firstLine.split('[COORDINATES')[0].trim();
         
         parsedVenues.push({
-          name: name || "Sports Facility",
+          name: name || (lang === 'it' ? "Impianto Sportivo" : "Sports Facility"),
           description: section.replace(/\[COORDINATES:.*?\]/, '').trim(),
           coords: [lat, lng]
         });
@@ -84,8 +120,14 @@ const Maps: React.FC<{ lang: Language }> = ({ lang }) => {
     });
 
     setVenues(parsedVenues);
-    updateMapMarkers(parsedVenues);
-  }, [results]);
+  }, [results, lang]);
+
+  // Update markers when venues or map is ready
+  useEffect(() => {
+    if (mapReady && venues.length >= 0) {
+      updateMapMarkers(venues);
+    }
+  }, [mapReady, venues]);
 
   const updateMapMarkers = (venuesList: Venue[]) => {
     const L = (window as any).L;
@@ -94,7 +136,9 @@ const Maps: React.FC<{ lang: Language }> = ({ lang }) => {
     markersLayerRef.current.clearLayers();
     
     if (venuesList.length === 0) {
-      if (coords) mapRef.current.flyTo([coords.lat, coords.lng], 14);
+      if (coords) {
+        mapRef.current.flyTo([coords.lat, coords.lng], 14);
+      }
       return;
     }
 
@@ -104,7 +148,7 @@ const Maps: React.FC<{ lang: Language }> = ({ lang }) => {
       const marker = L.marker(v.coords, {
         icon: L.divIcon({
           className: 'custom-marker',
-          html: `<div class="w-10 h-10 bg-blue-600 rounded-full border-4 border-white dark:border-gray-800 flex items-center justify-center text-white shadow-2xl scale-100 hover:scale-110 transition-transform cursor-pointer"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg></div>`,
+          html: `<div class="w-10 h-10 bg-blue-600 rounded-full border-4 border-white dark:border-gray-800 flex items-center justify-center text-white shadow-2xl scale-100 hover:scale-110 transition-all cursor-pointer"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg></div>`,
           iconSize: [40, 40],
           iconAnchor: [20, 40]
         })
@@ -119,7 +163,7 @@ const Maps: React.FC<{ lang: Language }> = ({ lang }) => {
       bounds.extend(v.coords);
     });
 
-    mapRef.current.fitBounds(bounds, { padding: [100, 100], maxZoom: 15 });
+    mapRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
   };
 
   const handleSearch = async (loc?: string, explicitCoords?: { lat: number; lng: number }) => {

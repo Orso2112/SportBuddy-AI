@@ -1,7 +1,7 @@
 
-import React, { useMemo } from 'react';
-import { Tab, UserProfile, Language, WorkoutLog } from '../types';
-import { Activity, Map as MapIcon, Users, Trophy, MessageSquare, Flame, Calendar, ChevronRight, Zap, Target, Star, TrendingUp, Award } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Tab, UserProfile, Language, WorkoutLog, MatchAd } from '../types';
+import { Activity, Map as MapIcon, Users, Trophy, MessageSquare, Flame, Calendar, ChevronRight, Zap, Target, Star, TrendingUp, Award, Clock, MapPin, Users as UsersIcon } from 'lucide-react';
 import { translations } from '../i18n';
 
 interface DashboardProps {
@@ -12,11 +12,22 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, lang }) => {
   const t = translations[lang];
+  const [activeSubTab, setActiveSubTab] = useState<'OVERVIEW' | 'GAMES_JOINED'>('OVERVIEW');
   
   const workouts: WorkoutLog[] = useMemo(() => {
     const saved = localStorage.getItem('sportbuddy_workouts');
     return saved ? JSON.parse(saved) : [];
   }, []);
+
+  const joinedGames: MatchAd[] = useMemo(() => {
+    const saved = localStorage.getItem('sportbuddy_ads');
+    if (!saved) return [];
+    const allAds: MatchAd[] = JSON.parse(saved);
+    return allAds.filter(ad => 
+      ad.status === 'FULL' && 
+      (ad.creatorEmail === user.email || (ad.joinedPlayers && ad.joinedPlayers.includes(user.email)))
+    );
+  }, [user.email]);
 
   const streak = useMemo(() => {
     if (workouts.length === 0) return 0;
@@ -60,7 +71,25 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, lang }) => {
 
   return (
     <div className="space-y-8 pb-10">
-      {/* Super "Alive" Welcome Banner */}
+      {/* Tab Switcher */}
+      <div className="flex gap-2 p-1 bg-gray-100 dark:bg-gray-800 rounded-2xl w-fit mx-auto sm:mx-0">
+        <button 
+          onClick={() => setActiveSubTab('OVERVIEW')}
+          className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeSubTab === 'OVERVIEW' ? 'bg-white dark:bg-gray-900 text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+        >
+          {lang === 'en' ? 'Overview' : 'Panoramica'}
+        </button>
+        <button 
+          onClick={() => setActiveSubTab('GAMES_JOINED')}
+          className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeSubTab === 'GAMES_JOINED' ? 'bg-white dark:bg-gray-900 text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+        >
+          {t.joined_games}
+        </button>
+      </div>
+
+      {activeSubTab === 'OVERVIEW' ? (
+        <>
+          {/* Super "Alive" Welcome Banner */}
       <section className="relative group overflow-visible">
         <div className="absolute -inset-2 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 rounded-[3rem] blur-xl opacity-20 group-hover:opacity-40 transition duration-1000 group-hover:duration-500"></div>
         <div className="relative bg-gradient-to-br from-blue-700 via-blue-800 to-indigo-950 rounded-[2.5rem] p-8 text-white shadow-2xl overflow-hidden min-h-[220px] flex items-center border border-white/10">
@@ -228,6 +257,88 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, lang }) => {
           </div>
         </div>
       </div>
+      </>
+      ) : (
+        <div className="space-y-6 px-2">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-blue-600/10 text-blue-600 flex items-center justify-center border border-blue-500/10">
+              <Trophy size={22} />
+            </div>
+            <h3 className="text-2xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight">{t.joined_games}</h3>
+          </div>
+
+          <div className="grid grid-cols-1 gap-6">
+            {joinedGames.length === 0 ? (
+              <div className="bg-white/50 dark:bg-gray-900/30 border-2 border-dashed border-gray-200 dark:border-gray-800 rounded-[3rem] p-24 text-center flex flex-col items-center">
+                <div className="w-24 h-24 bg-gray-50 dark:bg-gray-800 rounded-full flex items-center justify-center text-gray-300 mb-8 shadow-inner">
+                  <UsersIcon size={48} />
+                </div>
+                <p className="text-sm text-gray-400 font-black uppercase tracking-widest">{lang === 'en' ? 'No games joined yet' : 'Nessuna partita unita ancora'}</p>
+                <button 
+                  onClick={() => onNavigate(Tab.SOCIAL)}
+                  className="mt-8 bg-blue-600 text-white px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20"
+                >
+                  {lang === 'en' ? 'Find a Match' : 'Trova una partita'}
+                </button>
+              </div>
+            ) : (
+              joinedGames.map(game => (
+                <div key={game.id} className="bg-white dark:bg-gray-900 rounded-[3rem] p-8 shadow-xl border border-gray-100 dark:border-gray-800 animate-in slide-in-from-bottom duration-500">
+                  <div className="flex justify-between items-start mb-8">
+                    <div className="flex items-center gap-4">
+                      <div className="w-16 h-16 bg-blue-600 text-white rounded-[1.5rem] flex items-center justify-center shadow-lg shadow-blue-500/20">
+                        <Trophy size={32} />
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{game.sport}</span>
+                        <h4 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tight leading-none mt-1">{t.match_recap}</h4>
+                      </div>
+                    </div>
+                    <div className="bg-emerald-500/10 text-emerald-500 px-4 py-2 rounded-full border border-emerald-500/20">
+                      <span className="text-[10px] font-black uppercase tracking-widest">Confirmed</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+                    <div className="flex items-center gap-4 bg-gray-50 dark:bg-gray-800/50 p-5 rounded-2xl border border-gray-100 dark:border-gray-800">
+                      <MapPin size={20} className="text-blue-500" />
+                      <div className="flex flex-col">
+                        <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Location</span>
+                        <span className="text-xs font-bold text-gray-900 dark:text-white uppercase truncate">{game.location}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4 bg-gray-50 dark:bg-gray-800/50 p-5 rounded-2xl border border-gray-100 dark:border-gray-800">
+                      <Clock size={20} className="text-indigo-500" />
+                      <div className="flex flex-col">
+                        <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Time</span>
+                        <span className="text-xs font-bold text-gray-900 dark:text-white uppercase truncate">{game.time}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2">
+                      <UsersIcon size={16} className="text-gray-400" />
+                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{t.playing_with}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <div className="px-4 py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
+                        <Star size={12} fill="currentColor" />
+                        {game.creator} (Host)
+                      </div>
+                      {(game.joinedPlayers || []).map(player => (
+                        <div key={player} className="px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-xl text-[10px] font-black uppercase tracking-widest">
+                          {player.split('@')[0]}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
